@@ -7,6 +7,7 @@ import http from 'http';
 import { initSocket } from './lib/socket';
 import { errorHandler } from './middleware/errorHandler';
 import authRouter from './routes/auth';
+import assetsRouter from './routes/assets';
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -26,6 +27,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/assets', assetsRouter);
 
 app.use(errorHandler);
 

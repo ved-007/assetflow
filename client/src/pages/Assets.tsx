@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import {
   Search, Plus, Package, Tag, MapPin, X, ChevronDown
 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
 
 type AssetStatus = "AVAILABLE" | "ALLOCATED" | "RESERVED" | "UNDER_MAINTENANCE" | "LOST" | "RETIRED" | "DISPOSED";
 type AssetCondition = "NEW" | "GOOD" | "FAIR" | "POOR";
@@ -37,20 +39,7 @@ const CONDITION_META: Record<AssetCondition, { label: string; color: string }> =
   POOR: { label: "Poor", color: "text-red-400" },
 };
 
-const MOCK_ASSETS: Asset[] = [
-  { id: 1,  assetTag: "AF-0001", name: "Dell XPS 15 Laptop",      category: "Laptops",      serialNumber: "SN-DX15-001", location: "IT Dept – Floor 2", status: "ALLOCATED",         condition: "GOOD", acquisitionDate: "2023-01-15", acquisitionCost: 85000, isBookable: false },
-  { id: 2,  assetTag: "AF-0002", name: "HP LaserJet 5200",        category: "Printers",     serialNumber: "SN-HP52-002", location: "Finance – Floor 1", status: "AVAILABLE",          condition: "GOOD", acquisitionDate: "2022-09-01", acquisitionCost: 22000, isBookable: false },
-  { id: 3,  assetTag: "AF-0003", name: "Conference Room A",       category: "Meeting Rooms", serialNumber: "ROOM-A-001",  location: "HQ – Floor 3",      status: "RESERVED",           condition: "NEW",  acquisitionDate: "2021-06-10", acquisitionCost: 0,     isBookable: true  },
-  { id: 4,  assetTag: "AF-0004", name: "Epson Projector Pro",     category: "Projectors",   serialNumber: "SN-EP-004",   location: "Training Room",     status: "UNDER_MAINTENANCE",  condition: "FAIR", acquisitionDate: "2020-11-20", acquisitionCost: 35000, isBookable: true  },
-  { id: 5,  assetTag: "AF-0005", name: "MacBook Pro M2",          category: "Laptops",      serialNumber: "SN-MBP-005",  location: "Design Team",       status: "AVAILABLE",          condition: "NEW",  acquisitionDate: "2024-02-01", acquisitionCost: 145000, isBookable: false },
-  { id: 6,  assetTag: "AF-0006", name: "Logitech MX Keys Board",  category: "Keyboards",    serialNumber: "SN-LMX-006",  location: "IT Store",          status: "AVAILABLE",          condition: "GOOD", acquisitionDate: "2023-05-10", acquisitionCost: 8500,  isBookable: false },
-  { id: 7,  assetTag: "AF-0007", name: "Toyota Innova (MH12AB1234)", category: "Vehicles",  serialNumber: "VIN-TOY-007", location: "Basement Parking",  status: "ALLOCATED",          condition: "GOOD", acquisitionDate: "2022-04-15", acquisitionCost: 1800000, isBookable: true },
-  { id: 8,  assetTag: "AF-0008", name: "LG 27\" 4K Monitor",      category: "Monitors",     serialNumber: "SN-LG4K-008", location: "Dev Team – Floor 2",status: "ALLOCATED",          condition: "NEW",  acquisitionDate: "2024-01-20", acquisitionCost: 28000, isBookable: false },
-  { id: 9,  assetTag: "AF-0009", name: "Canon EOS R5 Camera",     category: "Electronics",  serialNumber: "SN-CR5-009",  location: "Media Cupboard",    status: "AVAILABLE",          condition: "GOOD", acquisitionDate: "2023-07-01", acquisitionCost: 220000, isBookable: true },
-  { id: 10, assetTag: "AF-0010", name: "Aeron Chair (Blue Tag)",   category: "Furniture",    serialNumber: "CHAIR-010",   location: "Board Room",        status: "RETIRED",            condition: "POOR", acquisitionDate: "2018-01-01", acquisitionCost: 45000, isBookable: false },
-];
-
-const CATEGORIES = ["All", "Laptops", "Printers", "Meeting Rooms", "Projectors", "Monitors", "Keyboards", "Vehicles", "Electronics", "Furniture"];
+const CATEGORIES = ["All", "Laptops", "Printers", "Conference Rooms", "Meeting Rooms", "Projectors", "Monitors", "Keyboards", "Vehicles", "Electronics", "Furniture"];
 const STATUSES: ("All" | AssetStatus)[] = ["All", "AVAILABLE", "ALLOCATED", "RESERVED", "UNDER_MAINTENANCE", "LOST", "RETIRED", "DISPOSED"];
 
 export const Assets: React.FC = () => {
@@ -58,7 +47,39 @@ export const Assets: React.FC = () => {
   const [catFilter, setCatFilter]     = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | AssetStatus>("All");
   const [showRegister, setShowRegister] = useState(false);
-  const [assets, setAssets]           = useState<Asset[]>(MOCK_ASSETS);
+
+  const queryClient = useQueryClient();
+
+  const { data: assetsData, isLoading, error } = useQuery({
+    queryKey: ["assets", catFilter, statusFilter, search],
+    queryFn: async () => {
+      const res = await api.get("/assets", {
+        params: {
+          category: catFilter === "All" ? undefined : catFilter,
+          status: statusFilter === "All" ? undefined : statusFilter,
+          q: search || undefined
+        }
+      });
+      return res.data.data as Asset[];
+    }
+  });
+
+  const assets = assetsData || [];
+
+  const registerMutation = useMutation({
+    mutationFn: async (newAssetData: any) => {
+      const res = await api.post("/assets", newAssetData);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      setShowRegister(false);
+      setForm({ name: "", serialNumber: "", category: "Laptops", location: "", acquisitionDate: "", acquisitionCost: "", condition: "GOOD", isBookable: false });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.error || "Failed to register asset");
+    }
+  });
 
   // Register form state
   const [form, setForm] = useState({
@@ -66,6 +87,41 @@ export const Assets: React.FC = () => {
     location: "", acquisitionDate: "", acquisitionCost: "",
     condition: "GOOD" as AssetCondition, isBookable: false,
   });
+
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    registerMutation.mutate({
+      name: form.name,
+      category: form.category,
+      serialNumber: form.serialNumber,
+      location: form.location,
+      condition: form.condition,
+      acquisitionDate: form.acquisitionDate || undefined,
+      acquisitionCost: form.acquisitionCost ? Number(form.acquisitionCost) : undefined,
+      isBookable: form.isBookable,
+    });
+  };
+
+  // Summary counts
+  const available   = assets.filter((a) => a.status === "AVAILABLE").length;
+  const allocated   = assets.filter((a) => a.status === "ALLOCATED").length;
+  const maintenance = assets.filter((a) => a.status === "UNDER_MAINTENANCE").length;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        <div className="animate-pulse">Loading assets from server...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-20 text-red-400">
+        Error loading assets: {(error as any).message}
+      </div>
+    );
+  }
 
   const filtered = assets.filter((a) => {
     const matchSearch = a.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -76,31 +132,7 @@ export const Assets: React.FC = () => {
     return matchSearch && matchCat && matchStatus;
   });
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newId = assets.length + 1;
-    const newAsset: Asset = {
-      id: newId,
-      assetTag: `AF-${String(newId).padStart(4, "0")}`,
-      name: form.name,
-      category: form.category,
-      serialNumber: form.serialNumber,
-      location: form.location,
-      status: "AVAILABLE",
-      condition: form.condition,
-      acquisitionDate: form.acquisitionDate,
-      acquisitionCost: Number(form.acquisitionCost),
-      isBookable: form.isBookable,
-    };
-    setAssets([newAsset, ...assets]);
-    setShowRegister(false);
-    setForm({ name: "", serialNumber: "", category: "Laptops", location: "", acquisitionDate: "", acquisitionCost: "", condition: "GOOD", isBookable: false });
-  };
 
-  // Summary counts
-  const available   = assets.filter((a) => a.status === "AVAILABLE").length;
-  const allocated   = assets.filter((a) => a.status === "ALLOCATED").length;
-  const maintenance = assets.filter((a) => a.status === "UNDER_MAINTENANCE").length;
 
   return (
     <div className="space-y-6">
@@ -195,8 +227,8 @@ export const Assets: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-900">
                 {filtered.map((asset) => {
-                  const sm = STATUS_META[asset.status];
-                  const cm = CONDITION_META[asset.condition];
+                  const sm = STATUS_META[asset.status] || { label: asset.status, color: "bg-slate-500/10 text-slate-400 border-slate-500/25" };
+                  const cm = (asset.condition ? (CONDITION_META as any)[asset.condition.toUpperCase()] : null) || { label: asset.condition || "Good", color: "text-slate-400" };
                   return (
                     <tr key={asset.id} className="hover:bg-slate-900/30 transition-all">
                       <td className="px-6 py-4">

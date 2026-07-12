@@ -8,12 +8,13 @@ export async function logActivity(
   entityId: number,
   details?: Prisma.InputJsonValue,
 ): Promise<void> {
-  await prisma.audit_logs.create({
+  await prisma.activityLog.create({
     data: {
-      user_id: actorId,
+      actorId,
       action,
-      module: entityType,
-      description: JSON.stringify({ entityId, details }),
+      entityType,
+      entityId,
+      details,
     },
   });
 }

@@ -1,0 +1,2 @@
+ALTER TABLE `Allocation` ADD COLUMN `active_asset_id` INTEGER GENERATED ALWAYS AS (IF(`returnedAt` IS NULL, `assetId`, NULL)) VIRTUAL;
+ALTER TABLE `Allocation` ADD CONSTRAINT `uq_one_active_allocation` UNIQUE (`active_asset_id`);
