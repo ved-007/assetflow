@@ -1,6 +1,16 @@
-# AssetFlow — PROJECT CONTEXT (v4)
+# AssetFlow — PROJECT CONTEXT (v5)
 
 > **Paste this file at the start of every AI coding session. It keeps all three developers' generated code consistent.**
+
+## Current status (as of 2026-07-12)
+
+Full-stack scaffold is complete and feature-built out on both sides; polish/testing is what remains.
+
+- **Server (`/server`):** all domains implemented end-to-end (route → controller → service) — Auth, Org, Assets, Allocations, Transfers, Bookings, Maintenance, Audits, Dashboard, Reports, Notifications, ActivityLogs. Shared infra in place: `requireAuth`/`authorize` middleware, `errorHandler`, `logActivity`, `notify` (DB + Socket.io), Multer upload, JWT cookie auth, Prisma client, Socket.io server.
+- **Client (`/client`):** all pages exist and are routed in `App.tsx` (Login, Signup, Dashboard, OrgSetup, Assets, Maintenance, Reports, Notifications, ActivityLogs, Allocations, Bookings, Audits) behind `RequireAuth` + `SocketProvider` + `AppLayout`. Shared components (`DataTable`, `FormDialog`, `StatusBadge`, `ConfirmDialog`, `EmptyState`, `PageHeader`), `AuthContext`, `ThemeContext`, `lib/api.ts`, `lib/socket.ts`, `lib/queryClient.ts`, and `hooks/useApi.ts` are all built. `Placeholder.tsx` still exists but is unused in routing.
+- **Database:** Prisma schema + MySQL migrations already applied (per commit "Added MySQL database and Prisma setup").
+- **Git:** last commit `4eab571` "Implement Auth, Allocations, Bookings, Audits" on `main`; working tree clean.
+- **Not yet verified:** no evidence of automated tests; UI has not been walked through end-to-end in a browser recently. Treat remaining work as verification/bug-fixing and UX polish rather than net-new feature building, unless told otherwise.
 
 ## What we are building
 
