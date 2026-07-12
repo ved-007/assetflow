@@ -1,5 +1,5 @@
-import { prisma } from './prisma';
-import type { Prisma } from '@prisma/client';
+import { prisma } from "./prisma";
+import type { Prisma } from "@prisma/client";
 
 export async function logActivity(
   actorId: number,
@@ -8,13 +8,12 @@ export async function logActivity(
   entityId: number,
   details?: Prisma.InputJsonValue,
 ): Promise<void> {
-  await prisma.activityLog.create({
+  await prisma.audit_logs.create({
     data: {
-      actorId,
+      user_id: actorId,
       action,
-      entityType,
-      entityId,
-      details,
+      module: entityType,
+      description: JSON.stringify({ entityId, details }),
     },
   });
 }
