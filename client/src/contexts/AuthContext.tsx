@@ -31,19 +31,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkAuth = async () => {
       try {
         const userData = (await api.get("/auth/me")) as unknown as User;
-        if (userData && userData.id) {
-          setUser(userData);
-        } else {
-          setUser(null);
-        }
+        setUser(userData ?? null);
       } catch (err) {
-        // Fallback for development if server is not running yet
-        const localSession = localStorage.getItem("assetflow_mock_user");
-        if (localSession) {
-          setUser(JSON.parse(localSession));
-        } else {
-          setUser(null);
-        }
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -56,26 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userData = (await api.post("/auth/login", { email, password })) as unknown as User;
       setUser(userData);
-      localStorage.setItem("assetflow_mock_user", JSON.stringify(userData));
-    } catch (err: any) {
-      if (!err.response) {
-        let mockRole: Role = "EMPLOYEE";
-        if (email.includes("admin")) mockRole = "ADMIN";
-        else if (email.includes("manager")) mockRole = "ASSET_MANAGER";
-        else if (email.includes("head")) mockRole = "DEPT_HEAD";
-
-        const mockUser: User = {
-          id: 999,
-          name: email.split("@")[0].toUpperCase().replace(".", " "),
-          email,
-          role: mockRole,
-          departmentId: 1
-        };
-        setUser(mockUser);
-        localStorage.setItem("assetflow_mock_user", JSON.stringify(mockUser));
-        return;
-      }
-      throw err;
     } finally {
       setLoading(false);
     }
@@ -86,21 +56,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userData = (await api.post("/auth/signup", { name, email, password })) as unknown as User;
       setUser(userData);
-      localStorage.setItem("assetflow_mock_user", JSON.stringify(userData));
-    } catch (err: any) {
-      if (!err.response) {
-        const mockUser: User = {
-          id: Math.floor(Math.random() * 1000),
-          name,
-          email,
-          role: "EMPLOYEE",
-          departmentId: undefined
-        };
-        setUser(mockUser);
-        localStorage.setItem("assetflow_mock_user", JSON.stringify(mockUser));
-        return;
-      }
-      throw err;
     } finally {
       setLoading(false);
     }
@@ -110,11 +65,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await api.post("/auth/logout");
-    } catch (err) {
-      console.warn("Server logout request failed, clearing local state");
     } finally {
       setUser(null);
-      localStorage.removeItem("assetflow_mock_user");
       queryClient.clear();
       setLoading(false);
     }

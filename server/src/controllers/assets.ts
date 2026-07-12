@@ -41,9 +41,7 @@ export async function registerAsset(req: Request, res: Response, next: NextFunct
   }
 }
 
-const editSchema = registerSchema.partial().extend({
-  status: z.enum(['AVAILABLE', 'ALLOCATED', 'RESERVED', 'UNDER_MAINTENANCE', 'LOST', 'RETIRED', 'DISPOSED']).optional()
-});
+const editSchema = registerSchema.partial();
 
 export async function editAsset(req: Request, res: Response, next: NextFunction) {
   try {

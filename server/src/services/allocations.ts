@@ -22,6 +22,13 @@ export async function allocateAsset(actorId: number, data: { assetId: number; em
   const asset = await prisma.asset.findUnique({ where: { id: data.assetId } });
   if (!asset) throw new AppError(404, 'Asset not found');
   if (asset.status !== AssetStatus.AVAILABLE) {
+    const activeAlloc = await prisma.allocation.findFirst({
+      where: { assetId: data.assetId, returnedAt: null },
+      include: { employee: true },
+    });
+    if (activeAlloc) {
+      throw new AppError(409, `This asset is currently held by ${activeAlloc.employee.name}`);
+    }
     throw new AppError(409, 'Asset is not available for allocation');
   }
 

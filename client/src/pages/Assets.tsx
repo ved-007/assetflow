@@ -1,325 +1,244 @@
-import React, { useState } from "react";
-import {
-  Search, Plus, Package, Tag, MapPin, X, ChevronDown
-} from "lucide-react";
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import { Plus, Search, Tag, MapPin } from 'lucide-react';
+import { useApiQuery, useApiMutation } from '../hooks/useApi';
+import { useAuth } from '../contexts/AuthContext';
+import { PageHeader } from '../components/shared/PageHeader';
+import { DataTable, Column } from '../components/shared/DataTable';
+import { FormDialog } from '../components/shared/FormDialog';
+import { StatusBadge } from '../components/shared/StatusBadge';
+import { EmptyState } from '../components/shared/EmptyState';
 
-type AssetStatus = "AVAILABLE" | "ALLOCATED" | "RESERVED" | "UNDER_MAINTENANCE" | "LOST" | "RETIRED" | "DISPOSED";
-type AssetCondition = "NEW" | "GOOD" | "FAIR" | "POOR";
+const ASSET_STATUSES = ['AVAILABLE', 'ALLOCATED', 'RESERVED', 'UNDER_MAINTENANCE', 'LOST', 'RETIRED', 'DISPOSED'] as const;
 
-interface Asset {
+const registerSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  categoryId: z.coerce.number({ invalid_type_error: 'Category is required' }),
+  serialNumber: z.string().optional(),
+  acquisitionDate: z.string().optional(),
+  acquisitionCost: z.coerce.number().optional(),
+  condition: z.string().optional(),
+  location: z.string().optional(),
+  isBookable: z.coerce.boolean().optional(),
+});
+
+type Asset = {
   id: number;
   assetTag: string;
   name: string;
-  category: string;
-  serialNumber: string;
-  location: string;
-  status: AssetStatus;
-  condition: AssetCondition;
-  acquisitionDate: string;
-  acquisitionCost: number;
+  category: { id: number; name: string };
+  serialNumber?: string;
+  location?: string;
+  condition?: string;
+  status: string;
+  acquisitionDate?: string;
+  acquisitionCost?: number;
   isBookable: boolean;
-}
-
-const STATUS_META: Record<AssetStatus, { label: string; color: string }> = {
-  AVAILABLE:         { label: "Available",         color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" },
-  ALLOCATED:         { label: "Allocated",          color: "bg-blue-500/10 text-blue-400 border-blue-500/25" },
-  RESERVED:          { label: "Reserved",           color: "bg-purple-500/10 text-purple-400 border-purple-500/25" },
-  UNDER_MAINTENANCE: { label: "Under Maintenance",  color: "bg-amber-500/10 text-amber-400 border-amber-500/25" },
-  LOST:              { label: "Lost",               color: "bg-red-500/10 text-red-400 border-red-500/25" },
-  RETIRED:           { label: "Retired",            color: "bg-slate-500/10 text-slate-400 border-slate-500/25" },
-  DISPOSED:          { label: "Disposed",           color: "bg-slate-500/10 text-slate-500 border-slate-600/25" },
 };
 
-const CONDITION_META: Record<AssetCondition, { label: string; color: string }> = {
-  NEW:  { label: "New",  color: "text-emerald-400" },
-  GOOD: { label: "Good", color: "text-blue-400" },
-  FAIR: { label: "Fair", color: "text-amber-400" },
-  POOR: { label: "Poor", color: "text-red-400" },
-};
+export function Assets() {
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [editAsset, setEditAsset] = useState<Asset | null>(null);
 
-const MOCK_ASSETS: Asset[] = [
-  { id: 1,  assetTag: "AF-0001", name: "Dell XPS 15 Laptop",      category: "Laptops",      serialNumber: "SN-DX15-001", location: "IT Dept – Floor 2", status: "ALLOCATED",         condition: "GOOD", acquisitionDate: "2023-01-15", acquisitionCost: 85000, isBookable: false },
-  { id: 2,  assetTag: "AF-0002", name: "HP LaserJet 5200",        category: "Printers",     serialNumber: "SN-HP52-002", location: "Finance – Floor 1", status: "AVAILABLE",          condition: "GOOD", acquisitionDate: "2022-09-01", acquisitionCost: 22000, isBookable: false },
-  { id: 3,  assetTag: "AF-0003", name: "Conference Room A",       category: "Meeting Rooms", serialNumber: "ROOM-A-001",  location: "HQ – Floor 3",      status: "RESERVED",           condition: "NEW",  acquisitionDate: "2021-06-10", acquisitionCost: 0,     isBookable: true  },
-  { id: 4,  assetTag: "AF-0004", name: "Epson Projector Pro",     category: "Projectors",   serialNumber: "SN-EP-004",   location: "Training Room",     status: "UNDER_MAINTENANCE",  condition: "FAIR", acquisitionDate: "2020-11-20", acquisitionCost: 35000, isBookable: true  },
-  { id: 5,  assetTag: "AF-0005", name: "MacBook Pro M2",          category: "Laptops",      serialNumber: "SN-MBP-005",  location: "Design Team",       status: "AVAILABLE",          condition: "NEW",  acquisitionDate: "2024-02-01", acquisitionCost: 145000, isBookable: false },
-  { id: 6,  assetTag: "AF-0006", name: "Logitech MX Keys Board",  category: "Keyboards",    serialNumber: "SN-LMX-006",  location: "IT Store",          status: "AVAILABLE",          condition: "GOOD", acquisitionDate: "2023-05-10", acquisitionCost: 8500,  isBookable: false },
-  { id: 7,  assetTag: "AF-0007", name: "Toyota Innova (MH12AB1234)", category: "Vehicles",  serialNumber: "VIN-TOY-007", location: "Basement Parking",  status: "ALLOCATED",          condition: "GOOD", acquisitionDate: "2022-04-15", acquisitionCost: 1800000, isBookable: true },
-  { id: 8,  assetTag: "AF-0008", name: "LG 27\" 4K Monitor",      category: "Monitors",     serialNumber: "SN-LG4K-008", location: "Dev Team – Floor 2",status: "ALLOCATED",          condition: "NEW",  acquisitionDate: "2024-01-20", acquisitionCost: 28000, isBookable: false },
-  { id: 9,  assetTag: "AF-0009", name: "Canon EOS R5 Camera",     category: "Electronics",  serialNumber: "SN-CR5-009",  location: "Media Cupboard",    status: "AVAILABLE",          condition: "GOOD", acquisitionDate: "2023-07-01", acquisitionCost: 220000, isBookable: true },
-  { id: 10, assetTag: "AF-0010", name: "Aeron Chair (Blue Tag)",   category: "Furniture",    serialNumber: "CHAIR-010",   location: "Board Room",        status: "RETIRED",            condition: "POOR", acquisitionDate: "2018-01-01", acquisitionCost: 45000, isBookable: false },
-];
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManage = ['ADMIN', 'ASSET_MANAGER'].includes(user?.role || '');
 
-const CATEGORIES = ["All", "Laptops", "Printers", "Meeting Rooms", "Projectors", "Monitors", "Keyboards", "Vehicles", "Electronics", "Furniture"];
-const STATUSES: ("All" | AssetStatus)[] = ["All", "AVAILABLE", "ALLOCATED", "RESERVED", "UNDER_MAINTENANCE", "LOST", "RETIRED", "DISPOSED"];
+  const { data: assets, isLoading } = useApiQuery<Asset[]>(
+    ['assets', { search, categoryFilter, statusFilter }],
+    '/assets',
+    { q: search || undefined, category: categoryFilter || undefined, status: statusFilter || undefined }
+  );
+  const { data: categories } = useApiQuery(['categories'], '/org/categories');
 
-export const Assets: React.FC = () => {
-  const [search, setSearch]           = useState("");
-  const [catFilter, setCatFilter]     = useState("All");
-  const [statusFilter, setStatusFilter] = useState<"All" | AssetStatus>("All");
-  const [showRegister, setShowRegister] = useState(false);
-  const [assets, setAssets]           = useState<Asset[]>(MOCK_ASSETS);
+  const registerMut = useApiMutation('post', '/assets');
+  const editMut = useApiMutation('patch', (vars: any) => `/assets/${vars.id}`);
 
-  // Register form state
-  const [form, setForm] = useState({
-    name: "", serialNumber: "", category: "Laptops",
-    location: "", acquisitionDate: "", acquisitionCost: "",
-    condition: "GOOD" as AssetCondition, isBookable: false,
-  });
-
-  const filtered = assets.filter((a) => {
-    const matchSearch = a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.assetTag.toLowerCase().includes(search.toLowerCase()) ||
-      a.serialNumber.toLowerCase().includes(search.toLowerCase());
-    const matchCat    = catFilter === "All" || a.category === catFilter;
-    const matchStatus = statusFilter === "All" || a.status === statusFilter;
-    return matchSearch && matchCat && matchStatus;
-  });
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newId = assets.length + 1;
-    const newAsset: Asset = {
-      id: newId,
-      assetTag: `AF-${String(newId).padStart(4, "0")}`,
-      name: form.name,
-      category: form.category,
-      serialNumber: form.serialNumber,
-      location: form.location,
-      status: "AVAILABLE",
-      condition: form.condition,
-      acquisitionDate: form.acquisitionDate,
-      acquisitionCost: Number(form.acquisitionCost),
-      isBookable: form.isBookable,
-    };
-    setAssets([newAsset, ...assets]);
-    setShowRegister(false);
-    setForm({ name: "", serialNumber: "", category: "Laptops", location: "", acquisitionDate: "", acquisitionCost: "", condition: "GOOD", isBookable: false });
+  const handleRegister = (data: any) => {
+    registerMut.mutate(data, {
+      onSuccess: () => {
+        toast.success('Asset registered successfully');
+        queryClient.invalidateQueries({ queryKey: ['assets'] });
+        setRegisterOpen(false);
+      },
+      onError: (err: any) => toast.error(err.message),
+    });
   };
 
-  // Summary counts
-  const available   = assets.filter((a) => a.status === "AVAILABLE").length;
-  const allocated   = assets.filter((a) => a.status === "ALLOCATED").length;
-  const maintenance = assets.filter((a) => a.status === "UNDER_MAINTENANCE").length;
+  const handleEdit = (data: any) => {
+    editMut.mutate({ ...data, id: editAsset?.id }, {
+      onSuccess: () => {
+        toast.success('Asset updated successfully');
+        queryClient.invalidateQueries({ queryKey: ['assets'] });
+        setEditAsset(null);
+      },
+      onError: (err: any) => toast.error(err.message),
+    });
+  };
+
+  const columns: Column<Asset>[] = [
+    {
+      key: 'assetTag', header: 'Asset Tag',
+      render: (a) => <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-1 rounded">{a.assetTag}</span>,
+    },
+    {
+      key: 'name', header: 'Name & Category',
+      render: (a) => (
+        <div>
+          <div className="font-medium text-gray-900">{a.name}</div>
+          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+            <Tag size={12} /> {a.category?.name}
+            {a.isBookable && <span className="ml-1 text-purple-600 font-medium">[Bookable]</span>}
+          </div>
+        </div>
+      ),
+    },
+    { key: 'serialNumber', header: 'Serial #', render: (a) => a.serialNumber || '-' },
+    {
+      key: 'location', header: 'Location',
+      render: (a) => a.location ? <span className="flex items-center gap-1 text-sm"><MapPin size={12} className="text-gray-400" />{a.location}</span> : '-',
+    },
+    { key: 'condition', header: 'Condition', render: (a) => a.condition || '-' },
+    { key: 'status', header: 'Status', render: (a) => <StatusBadge status={a.status} /> },
+    {
+      key: 'acquired', header: 'Acquired',
+      render: (a) => a.acquisitionDate ? new Intl.DateTimeFormat('en-IN').format(new Date(a.acquisitionDate)) : '-',
+    },
+    {
+      key: 'cost', header: 'Cost',
+      render: (a) => a.acquisitionCost ? `₹${a.acquisitionCost.toLocaleString('en-IN')}` : '-',
+    },
+    ...(canManage ? [{
+      key: 'actions', header: 'Actions',
+      render: (a: Asset) => (
+        <button onClick={() => setEditAsset(a)} className="text-blue-600 hover:underline text-sm">Edit</button>
+      ),
+    }] : []),
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Assets Directory</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            {assets.length} assets registered &mdash; {available} available, {allocated} allocated, {maintenance} in maintenance
-          </p>
-        </div>
-        <button
-          onClick={() => setShowRegister(true)}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/10 transition-all self-start sm:self-auto border border-blue-400/20"
-        >
-          <Plus className="w-4 h-4" /> Register Asset
-        </button>
-      </div>
+      <PageHeader
+        title="Assets Directory"
+        description={assets ? `${assets.length} assets registered` : undefined}
+        action={canManage && (
+          <button onClick={() => setRegisterOpen(true)} className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+            <Plus size={18} />
+            <span>Register Asset</span>
+          </button>
+        )}
+      />
 
-      {/* Summary pills */}
-      <div className="flex flex-wrap gap-3">
-        {(Object.entries(STATUS_META) as [AssetStatus, {label:string;color:string}][]).map(([key, meta]) => {
-          const count = assets.filter((a) => a.status === key).length;
-          if (!count) return null;
-          return (
-            <button
-              key={key}
-              onClick={() => setStatusFilter(statusFilter === key ? "All" : key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${meta.color} ${statusFilter === key ? "ring-2 ring-white/20" : ""}`}
-            >
-              {meta.label} · {count}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Filters Row */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, tag or serial number…"
-            className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+            className="w-full border rounded-md py-2 pl-9 pr-3 text-sm"
           />
         </div>
-        <div className="flex gap-3">
-          <div className="relative">
-            <select
-              value={catFilter}
-              onChange={(e) => setCatFilter(e.target.value)}
-              className="appearance-none bg-slate-900 border border-slate-800 text-slate-300 text-sm rounded-xl py-2.5 pl-4 pr-9 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            >
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-          </div>
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="appearance-none bg-slate-900 border border-slate-800 text-slate-300 text-sm rounded-xl py-2.5 pl-4 pr-9 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            >
-              {STATUSES.map((s) => <option key={s}>{s === "All" ? "All Statuses" : STATUS_META[s].label}</option>)}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-          </div>
-        </div>
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="border rounded-md py-2 px-3 text-sm">
+          <option value="">All Categories</option>
+          {categories?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border rounded-md py-2 px-3 text-sm">
+          <option value="">All Statuses</option>
+          {ASSET_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+        </select>
       </div>
 
-      {/* Table */}
-      <div className="glass-panel border border-slate-900 rounded-3xl overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="py-20 text-center text-slate-500 text-sm">
-            No assets match your filters.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-slate-900 bg-slate-900/50 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  <th className="px-6 py-4">Asset Tag</th>
-                  <th className="px-6 py-4">Name &amp; Category</th>
-                  <th className="px-6 py-4">Serial #</th>
-                  <th className="px-6 py-4">Location</th>
-                  <th className="px-6 py-4">Condition</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Acquired</th>
-                  <th className="px-6 py-4">Cost (₹)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-900">
-                {filtered.map((asset) => {
-                  const sm = STATUS_META[asset.status];
-                  const cm = CONDITION_META[asset.condition];
-                  return (
-                    <tr key={asset.id} className="hover:bg-slate-900/30 transition-all">
-                      <td className="px-6 py-4">
-                        <span className="font-mono text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-lg">
-                          {asset.assetTag}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="block font-bold text-white">{asset.name}</span>
-                        <span className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                          <Tag className="w-3 h-3" />{asset.category}
-                          {asset.isBookable && <span className="ml-1 text-purple-400 font-semibold">[Bookable]</span>}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-400">{asset.serialNumber}</td>
-                      <td className="px-6 py-4 text-slate-300 text-xs flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />{asset.location}
-                      </td>
-                      <td className={`px-6 py-4 text-xs font-bold ${cm.color}`}>{cm.label}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border uppercase tracking-wider ${sm.color}`}>
-                          {sm.label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-400 text-xs">
-                        {new Intl.DateTimeFormat("en-IN").format(new Date(asset.acquisitionDate))}
-                      </td>
-                      <td className="px-6 py-4 text-slate-300 text-sm font-semibold">
-                        {asset.acquisitionCost > 0 ? `₹${asset.acquisitionCost.toLocaleString("en-IN")}` : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Register Asset Modal */}
-      {showRegister && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Package className="w-5 h-5 text-blue-400" /> Register New Asset
-              </h3>
-              <button onClick={() => setShowRegister(false)} className="text-slate-500 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleRegister} className="p-6 grid grid-cols-2 gap-4">
-              {/* Asset Name */}
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Asset Name *</label>
-                <input required value={form.name} onChange={(e) => setForm({...form, name: e.target.value})}
-                  placeholder="e.g. Dell XPS 15 Laptop"
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 px-4 text-sm placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
-              </div>
-              {/* Serial */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Serial Number *</label>
-                <input required value={form.serialNumber} onChange={(e) => setForm({...form, serialNumber: e.target.value})}
-                  placeholder="SN-XXXX-001"
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 px-4 text-sm placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
-              </div>
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Category *</label>
-                <select value={form.category} onChange={(e) => setForm({...form, category: e.target.value})}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                  {CATEGORIES.filter(c => c !== "All").map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              {/* Location */}
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Location *</label>
-                <input required value={form.location} onChange={(e) => setForm({...form, location: e.target.value})}
-                  placeholder="e.g. IT Dept – Floor 2"
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 px-4 text-sm placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
-              </div>
-              {/* Date */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Purchase Date</label>
-                <input type="date" value={form.acquisitionDate} onChange={(e) => setForm({...form, acquisitionDate: e.target.value})}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
-              </div>
-              {/* Cost */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Purchase Price (₹)</label>
-                <input type="number" value={form.acquisitionCost} onChange={(e) => setForm({...form, acquisitionCost: e.target.value})}
-                  placeholder="0"
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 px-4 text-sm placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
-              </div>
-              {/* Condition */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Condition</label>
-                <select value={form.condition} onChange={(e) => setForm({...form, condition: e.target.value as AssetCondition})}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                  {(["NEW","GOOD","FAIR","POOR"] as AssetCondition[]).map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              {/* Bookable */}
-              <div className="flex items-center gap-3 pt-5">
-                <input type="checkbox" id="bookable" checked={form.isBookable} onChange={(e) => setForm({...form, isBookable: e.target.checked})}
-                  className="w-4 h-4 rounded accent-blue-500" />
-                <label htmlFor="bookable" className="text-sm text-slate-300 font-medium">Asset is Bookable (room/vehicle)</label>
-              </div>
-
-              <div className="col-span-2 flex gap-3 justify-end pt-4 border-t border-slate-800 mt-2">
-                <button type="button" onClick={() => setShowRegister(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-800 hover:bg-slate-800 text-slate-300 font-semibold text-sm transition-colors">
-                  Cancel
-                </button>
-                <button type="submit"
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm shadow-lg shadow-blue-500/10 transition-colors">
-                  Register Asset
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {!isLoading && assets?.length === 0 ? (
+        <EmptyState title="No assets found" description="Try adjusting your filters, or register a new asset." />
+      ) : (
+        <DataTable data={assets || []} columns={columns} keyExtractor={(a) => a.id} loading={isLoading} />
       )}
+
+      <FormDialog
+        open={registerOpen}
+        onClose={() => setRegisterOpen(false)}
+        title="Register New Asset"
+        schema={registerSchema}
+        onSubmit={handleRegister}
+        loading={registerMut.isPending}
+      >
+        {(form) => (
+          <AssetFormFields form={form} categories={categories} />
+        )}
+      </FormDialog>
+
+      <FormDialog
+        open={!!editAsset}
+        onClose={() => setEditAsset(null)}
+        title={`Edit Asset: ${editAsset?.name}`}
+        schema={registerSchema.partial()}
+        onSubmit={handleEdit}
+        defaultValues={editAsset ? {
+          name: editAsset.name,
+          categoryId: editAsset.category?.id,
+          serialNumber: editAsset.serialNumber,
+          location: editAsset.location,
+          condition: editAsset.condition,
+          isBookable: editAsset.isBookable,
+        } as any : {}}
+        loading={editMut.isPending}
+      >
+        {(form) => (
+          <AssetFormFields form={form} categories={categories} />
+        )}
+      </FormDialog>
     </div>
   );
-};
+}
+
+function AssetFormFields({ form, categories }: { form: any; categories: any }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1">Asset Name *</label>
+        <input {...form.register('name')} className="w-full border rounded-md p-2" placeholder="e.g. Dell XPS 15 Laptop" />
+        {form.formState.errors.name && <p className="text-red-500 text-xs mt-1">{form.formState.errors.name.message}</p>}
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Category *</label>
+        <select {...form.register('categoryId')} className="w-full border rounded-md p-2">
+          <option value="">Select a category...</option>
+          {categories?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        {form.formState.errors.categoryId && <p className="text-red-500 text-xs mt-1">{form.formState.errors.categoryId.message}</p>}
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Serial Number</label>
+        <input {...form.register('serialNumber')} className="w-full border rounded-md p-2" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Location</label>
+        <input {...form.register('location')} className="w-full border rounded-md p-2" placeholder="e.g. Bengaluru HQ, Floor 2" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Acquisition Date</label>
+          <input type="date" {...form.register('acquisitionDate')} className="w-full border rounded-md p-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Cost (₹)</label>
+          <input type="number" {...form.register('acquisitionCost')} className="w-full border rounded-md p-2" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Condition</label>
+        <input {...form.register('condition')} className="w-full border rounded-md p-2" placeholder="e.g. Good, Excellent, Fair" />
+      </div>
+      <div className="flex items-center gap-2">
+        <input type="checkbox" id="isBookable" {...form.register('isBookable')} className="w-4 h-4" />
+        <label htmlFor="isBookable" className="text-sm">Asset is bookable (room/vehicle)</label>
+      </div>
+    </div>
+  );
+}

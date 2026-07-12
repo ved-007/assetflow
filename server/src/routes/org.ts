@@ -5,17 +5,19 @@ import { authorize } from '../middleware/authorize';
 
 const router = Router();
 router.use(requireAuth);
-router.use(authorize(['ADMIN']));
 
+// Reference-data reads are needed across workflows (allocate, register asset, etc.)
+// by any authenticated role; only mutations are Admin-only.
 router.get('/departments', orgController.getDepartments);
-router.post('/departments', orgController.createDepartment);
-router.patch('/departments/:id', orgController.updateDepartment);
-
 router.get('/categories', orgController.getCategories);
-router.post('/categories', orgController.createCategory);
-router.patch('/categories/:id', orgController.updateCategory);
-
 router.get('/employees', orgController.getEmployees);
-router.post('/employees/:id/role', orgController.updateEmployeeRole);
+
+router.post('/departments', authorize(['ADMIN']), orgController.createDepartment);
+router.patch('/departments/:id', authorize(['ADMIN']), orgController.updateDepartment);
+
+router.post('/categories', authorize(['ADMIN']), orgController.createCategory);
+router.patch('/categories/:id', authorize(['ADMIN']), orgController.updateCategory);
+
+router.post('/employees/:id/role', authorize(['ADMIN']), orgController.updateEmployeeRole);
 
 export default router;
