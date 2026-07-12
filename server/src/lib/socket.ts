@@ -1,56 +1,45 @@
-import type { Server as HttpServer } from 'http';
-import { Server, type Socket } from 'socket.io';
+import { Server as SocketIOServer } from 'socket.io';
+import { Server as HttpServer } from 'http';
+import { verifyToken, JwtPayload } from './jwt';
 import cookie from 'cookie';
-import { verifyToken } from './jwt';
 
-let io: Server | undefined;
+let io: SocketIOServer;
 
-export function initSocket(httpServer: HttpServer): Server {
-  io = new Server(httpServer, {
+export function initSocket(server: HttpServer, clientUrl: string) {
+  io = new SocketIOServer(server, {
     cors: {
-      origin: process.env.CLIENT_URL,
+      origin: clientUrl,
       credentials: true,
     },
   });
 
-  io.use((socket: Socket, next) => {
+  io.use((socket, next) => {
     try {
-      const rawCookie = socket.handshake.headers.cookie;
-      if (!rawCookie) {
-        return next(new Error('Unauthorized'));
-      }
-
-      const parsed = cookie.parse(rawCookie);
-      const token = parsed.token;
+      const cookies = cookie.parse(socket.handshake.headers.cookie || '');
+      const token = cookies.token;
+      
       if (!token) {
-        return next(new Error('Unauthorized'));
+        return next(new Error('Authentication error'));
       }
-
+      
       const payload = verifyToken(token);
       socket.data.user = payload;
       next();
-    } catch {
-      next(new Error('Unauthorized'));
+    } catch (err) {
+      next(new Error('Authentication error'));
     }
   });
 
-  io.on('connection', (socket: Socket) => {
-    const userId = socket.data.user?.id;
-    if (userId) {
-      socket.join(`user:${userId}`);
+  io.on('connection', (socket) => {
+    const user = socket.data.user as JwtPayload;
+    if (user && user.id) {
+      socket.join(`user:${user.id}`);
     }
   });
-
-  return io;
 }
 
-export function getIo(): Server {
-  if (!io) {
-    throw new Error('Socket.io has not been initialized');
+export function emitToUser(userId: number, event: string, payload: any) {
+  if (io) {
+    io.to(`user:${userId}`).emit(event, payload);
   }
-  return io;
-}
-
-export function emitToUser(userId: number, event: string, payload: unknown): void {
-  getIo().to(`user:${userId}`).emit(event, payload);
 }

@@ -1,35 +1,33 @@
-import multer, { type FileFilterCallback } from 'multer';
+import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import type { Request } from 'express';
+import { AppError } from './AppError';
 
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads');
-
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const uploadDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, UPLOAD_DIR);
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
   },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${unique}${ext}`);
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   },
 });
 
-const imageFilter = (_req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
-    cb(new Error('Only image files are allowed'));
+    cb(new AppError(400, 'Only images are allowed') as any, false);
   }
 };
 
-export const upload = multer({
+export const upload = multer({ 
   storage,
-  fileFilter: imageFilter,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });

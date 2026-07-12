@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
+import { queryClient } from "../lib/queryClient";
 
 export type Role = "ADMIN" | "ASSET_MANAGER" | "DEPT_HEAD" | "EMPLOYEE";
 
@@ -25,13 +27,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await api.get("/auth/me");
-        if (response.data?.ok) {
-          setUser(response.data.data);
+        const userData = (await api.get("/auth/me")) as unknown as User;
+        if (userData && userData.id) {
+          setUser(userData);
         } else {
           setUser(null);
         }
@@ -53,13 +54,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      const response = await api.post("/auth/login", { email, password });
-      if (response.data?.ok) {
-        setUser(response.data.data);
-        localStorage.setItem("assetflow_mock_user", JSON.stringify(response.data.data));
-      }
+      const userData = (await api.post("/auth/login", { email, password })) as unknown as User;
+      setUser(userData);
+      localStorage.setItem("assetflow_mock_user", JSON.stringify(userData));
     } catch (err: any) {
-      // Mock login for offline testing if API is unavailable during hackathon
       if (!err.response) {
         let mockRole: Role = "EMPLOYEE";
         if (email.includes("admin")) mockRole = "ADMIN";
@@ -77,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem("assetflow_mock_user", JSON.stringify(mockUser));
         return;
       }
-      throw new Error(err.response?.data?.error || "Login failed");
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -86,11 +84,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (name: string, email: string, password: string) => {
     setLoading(true);
     try {
-      const response = await api.post("/auth/signup", { name, email, password });
-      if (response.data?.ok) {
-        setUser(response.data.data);
-        localStorage.setItem("assetflow_mock_user", JSON.stringify(response.data.data));
-      }
+      const userData = (await api.post("/auth/signup", { name, email, password })) as unknown as User;
+      setUser(userData);
+      localStorage.setItem("assetflow_mock_user", JSON.stringify(userData));
     } catch (err: any) {
       if (!err.response) {
         const mockUser: User = {
@@ -104,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem("assetflow_mock_user", JSON.stringify(mockUser));
         return;
       }
-      throw new Error(err.response?.data?.error || "Signup failed");
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -119,6 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setUser(null);
       localStorage.removeItem("assetflow_mock_user");
+      queryClient.clear();
       setLoading(false);
     }
   };
@@ -136,4 +133,29 @@ export const useAuth = () => {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+};
+
+export const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return null;
+  
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+};
+
+export const RequireRole = ({ roles, children }: { roles: Role[], children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
 };

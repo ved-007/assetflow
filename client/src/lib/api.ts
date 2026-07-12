@@ -1,19 +1,19 @@
-import axios from "axios";
-
-// Standard hackathon backend URL, falls back to localhost:5000/api
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
   withCredentials: true,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
-// Error response mapper utility
-export interface ApiResponse<T> {
-  ok: boolean;
-  data?: T;
-  error?: string;
-}
+api.interceptors.response.use(
+  (response) => {
+    if (response.data && 'data' in response.data) {
+      return response.data.data;
+    }
+    return response.data;
+  },
+  (error) => {
+    const message = error.response?.data?.message || error.message || 'An unexpected error occurred';
+    return Promise.reject(new Error(message));
+  }
+);

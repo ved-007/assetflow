@@ -1,9 +1,13 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "sonner";
+import { AuthProvider, RequireAuth } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { SocketProvider } from "./components/SocketProvider";
 import { AppLayout } from "./components/layout/AppLayout";
+import { queryClient } from "./lib/queryClient";
+
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 import { Dashboard } from "./pages/Dashboard";
@@ -13,44 +17,25 @@ import { Maintenance } from "./pages/Maintenance";
 import { Reports } from "./pages/Reports";
 import { Notifications } from "./pages/Notifications";
 import { ActivityLogs } from "./pages/ActivityLogs";
-import { Placeholder } from "./pages/Placeholder";
+import { Allocations } from "./pages/Allocations";
+import { Bookings } from "./pages/Bookings";
+import { Audits } from "./pages/Audits";
 
-// Initialize TanStack Query Client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: false,
-    },
-  },
-});
+const ProtectedLayout = ({ children }: { children: React.ReactNode }) => (
+  <RequireAuth>
+    <SocketProvider>
+      <AppLayout>{children}</AppLayout>
+    </SocketProvider>
+  </RequireAuth>
+);
 
-// Guard component to protect private routes
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground text-sm">
-        Loading session...
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <AppLayout>{children}</AppLayout>;
-};
-
-// Main Router wrapper
 export default function App() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
+            <Toaster position="top-right" />
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
@@ -60,85 +45,81 @@ export default function App() {
               <Route
                 path="/"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedLayout>
                     <Dashboard />
-                  </ProtectedRoute>
+                  </ProtectedLayout>
                 }
               />
               <Route
                 path="/org-setup"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedLayout>
                     <OrgSetup />
-                  </ProtectedRoute>
+                  </ProtectedLayout>
                 }
               />
-
-              {/* V-module pages (Vedant) */}
               <Route
                 path="/assets"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedLayout>
                     <Assets />
-                  </ProtectedRoute>
+                  </ProtectedLayout>
                 }
               />
               <Route
                 path="/maintenance"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedLayout>
                     <Maintenance />
-                  </ProtectedRoute>
+                  </ProtectedLayout>
                 }
               />
               <Route
                 path="/reports"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedLayout>
                     <Reports />
-                  </ProtectedRoute>
+                  </ProtectedLayout>
                 }
               />
               <Route
                 path="/notifications"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedLayout>
                     <Notifications />
-                  </ProtectedRoute>
+                  </ProtectedLayout>
                 }
               />
               <Route
                 path="/activity-logs"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedLayout>
                     <ActivityLogs />
-                  </ProtectedRoute>
+                  </ProtectedLayout>
                 }
               />
-
-              {/* R-core placeholders (Allocation, Booking, Audit) */}
               <Route
                 path="/allocation"
                 element={
-                  <ProtectedRoute>
-                    <Placeholder moduleName="Asset Allocation & Transfer" assignedTo="R (r-core)" />
-                  </ProtectedRoute>
+                  <ProtectedLayout>
+                    <Allocations />
+                  </ProtectedLayout>
                 }
               />
               <Route
                 path="/booking"
                 element={
-                  <ProtectedRoute>
-                    <Placeholder moduleName="Resource Booking" assignedTo="R (r-core)" />
-                  </ProtectedRoute>
+                  <ProtectedLayout>
+                    <Bookings />
+                  </ProtectedLayout>
                 }
               />
               <Route
                 path="/audit"
                 element={
-                  <ProtectedRoute>
-                    <Placeholder moduleName="Asset Audit" assignedTo="R (r-core)" />
-                  </ProtectedRoute>
+                  <ProtectedLayout>
+                    <Audits />
+                  </ProtectedLayout>
                 }
               />
 

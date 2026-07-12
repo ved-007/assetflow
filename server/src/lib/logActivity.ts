@@ -1,19 +1,13 @@
-import { prisma } from "./prisma";
-import type { Prisma } from "@prisma/client";
+import { prisma } from './prisma';
 
-export async function logActivity(
-  actorId: number,
-  action: string,
-  entityType: string,
-  entityId: number,
-  details?: Prisma.InputJsonValue,
-): Promise<void> {
-  await prisma.audit_logs.create({
+export async function logActivity(actorId: number, action: string, entityType: string, entityId: number, details?: any) {
+  return prisma.activityLog.create({
     data: {
-      user_id: actorId,
+      actorId,
       action,
-      module: entityType,
-      description: JSON.stringify({ entityId, details }),
+      entityType,
+      entityId,
+      details: details ? details : undefined,
     },
   });
 }

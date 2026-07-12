@@ -7,207 +7,295 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model asset_assignments {
-  assignment_id                              Int                                  @id @default(autoincrement())
-  asset_id                                   Int
-  user_id                                    Int
-  assigned_by                                Int?
-  assigned_date                              DateTime                             @db.Date
-  return_date                                DateTime?                            @db.Date
-  assignment_status                          asset_assignments_assignment_status? @default(Assigned)
-  remarks                                    String?                              @db.Text
-  users_asset_assignments_assigned_byTousers users?                               @relation("asset_assignments_assigned_byTousers", fields: [assigned_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignment_admin")
-  assets                                     assets                               @relation(fields: [asset_id], references: [asset_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignment_asset")
-  users_asset_assignments_user_idTousers     users                                @relation("asset_assignments_user_idTousers", fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignment_user")
-
-  @@index([assigned_by], map: "fk_assignment_admin")
-  @@index([asset_id], map: "fk_assignment_asset")
-  @@index([user_id], map: "fk_assignment_user")
+enum Role {
+  ADMIN
+  ASSET_MANAGER
+  DEPT_HEAD
+  EMPLOYEE
 }
 
-model assets {
-  asset_id             Int                     @id @default(autoincrement())
-  asset_tag            String                  @unique(map: "asset_tag") @db.VarChar(50)
-  asset_name           String                  @db.VarChar(100)
-  category_id          Int
-  vendor_id            Int?
-  serial_number        String?                 @unique(map: "serial_number") @db.VarChar(100)
-  purchase_date        DateTime?               @db.Date
-  purchase_price       Decimal?                @db.Decimal(10, 2)
-  warranty_end         DateTime?               @db.Date
-  location             String?                 @db.VarChar(100)
-  asset_status         assets_asset_status?    @default(Available)
-  asset_condition      assets_asset_condition? @default(Good)
-  created_at           DateTime?               @default(now()) @db.Timestamp(0)
-  asset_assignments    asset_assignments[]
-  categories           categories              @relation(fields: [category_id], references: [category_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_asset_category")
-  vendors              vendors?                @relation(fields: [vendor_id], references: [vendor_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_asset_vendor")
-  maintenance_requests maintenance_requests[]
-
-  @@index([category_id], map: "fk_asset_category")
-  @@index([vendor_id], map: "fk_asset_vendor")
+enum AssetStatus {
+  AVAILABLE
+  ALLOCATED
+  RESERVED
+  UNDER_MAINTENANCE
+  LOST
+  RETIRED
+  DISPOSED
 }
 
-model audit_logs {
-  log_id      Int       @id @default(autoincrement())
-  user_id     Int?
-  action      String    @db.VarChar(100)
-  module      String    @db.VarChar(100)
-  description String?   @db.Text
-  ip_address  String?   @db.VarChar(45)
-  created_at  DateTime? @default(now()) @db.Timestamp(0)
-  users       users?    @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_audit_user")
-
-  @@index([user_id], map: "fk_audit_user")
+enum TransferStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
 }
 
-model categories {
-  category_id          Int                    @id @default(autoincrement())
-  category_name        String                 @unique(map: "category_name") @db.VarChar(100)
-  description          String?                @db.Text
-  created_at           DateTime?              @default(now()) @db.Timestamp(0)
-  assets               assets[]
-  procurement_requests procurement_requests[]
+enum BookingStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
 }
 
-model departments {
-  department_id   Int       @id @default(autoincrement())
-  department_name String    @unique(map: "department_name") @db.VarChar(100)
-  description     String?   @db.Text
-  created_at      DateTime? @default(now()) @db.Timestamp(0)
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
 }
 
-model maintenance_requests {
-  maintenance_id    Int                            @id @default(autoincrement())
-  asset_id          Int
-  reported_by       Int
-  issue_title       String                         @db.VarChar(150)
-  issue_description String?                        @db.Text
-  priority          maintenance_requests_priority? @default(Medium)
-  status            maintenance_requests_status?   @default(Pending)
-  technician_name   String?                        @db.VarChar(100)
-  cost              Decimal?                       @db.Decimal(10, 2)
-  reported_date     DateTime?                      @default(now()) @db.Timestamp(0)
-  completed_date    DateTime?                      @db.Timestamp(0)
-  assets            assets                         @relation(fields: [asset_id], references: [asset_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_maintenance_asset")
-  users             users                          @relation(fields: [reported_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_maintenance_user")
-
-  @@index([asset_id], map: "fk_maintenance_asset")
-  @@index([reported_by], map: "fk_maintenance_user")
+enum MaintenanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  TECHNICIAN_ASSIGNED
+  IN_PROGRESS
+  RESOLVED
 }
 
-model notifications {
-  notification_id   Int                              @id @default(autoincrement())
-  user_id           Int
-  title             String                           @db.VarChar(150)
-  message           String                           @db.Text
-  notification_type notifications_notification_type? @default(Info)
-  is_read           Boolean?                         @default(false)
-  created_at        DateTime?                        @default(now()) @db.Timestamp(0)
-  users             users                            @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_notification_user")
-
-  @@index([user_id], map: "fk_notification_user")
+enum AuditCycleStatus {
+  OPEN
+  CLOSED
 }
 
-model procurement_requests {
-  request_id                                     Int                          @id @default(autoincrement())
-  requested_by                                   Int
-  asset_name                                     String                       @db.VarChar(100)
-  category_id                                    Int
-  quantity                                       Int                          @default(1)
-  estimated_price                                Decimal?                     @db.Decimal(10, 2)
-  justification                                  String?                      @db.Text
-  status                                         procurement_requests_status? @default(Pending)
-  request_date                                   DateTime?                    @default(now()) @db.Timestamp(0)
-  approved_by                                    Int?
-  approval_date                                  DateTime?                    @db.Timestamp(0)
-  users_procurement_requests_approved_byTousers  users?                       @relation("procurement_requests_approved_byTousers", fields: [approved_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_procurement_approver")
-  categories                                     categories                   @relation(fields: [category_id], references: [category_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_procurement_category")
-  users_procurement_requests_requested_byTousers users                        @relation("procurement_requests_requested_byTousers", fields: [requested_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_procurement_user")
-
-  @@index([approved_by], map: "fk_procurement_approver")
-  @@index([category_id], map: "fk_procurement_category")
-  @@index([requested_by], map: "fk_procurement_user")
+enum AuditItemResult {
+  PENDING
+  VERIFIED
+  MISSING
+  DAMAGED
 }
 
-model users {
-  user_id                                                       Int                    @id @default(autoincrement())
-  full_name                                                     String                 @db.VarChar(100)
-  email                                                         String                 @unique(map: "email") @db.VarChar(100)
-  password                                                      String                 @db.VarChar(255)
-  role                                                          users_role
-  department                                                    String?                @db.VarChar(100)
-  created_at                                                    DateTime?              @default(now()) @db.Timestamp(0)
-  asset_assignments_asset_assignments_assigned_byTousers        asset_assignments[]    @relation("asset_assignments_assigned_byTousers")
-  asset_assignments_asset_assignments_user_idTousers            asset_assignments[]    @relation("asset_assignments_user_idTousers")
-  audit_logs                                                    audit_logs[]
-  maintenance_requests                                          maintenance_requests[]
-  notifications                                                 notifications[]
-  procurement_requests_procurement_requests_approved_byTousers  procurement_requests[] @relation("procurement_requests_approved_byTousers")
-  procurement_requests_procurement_requests_requested_byTousers procurement_requests[] @relation("procurement_requests_requested_byTousers")
+model User {
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  email                String    @unique
+  passwordHash         String
+  departmentId         Int?
+  role                 Role      @default(EMPLOYEE)
+  status               String    @default("ACTIVE") // Just a generic string status or boolean? Using string.
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  department           Department? @relation("DepartmentMembers", fields: [departmentId], references: [id])
+  headedDepartments    Department[] @relation("DepartmentHead")
+
+  allocations          Allocation[] @relation("EmployeeAllocations")
+  transfersFrom        TransferRequest[] @relation("TransferFrom")
+  transfersTo          TransferRequest[] @relation("TransferTo")
+  transfersApproved    TransferRequest[] @relation("TransferApprover")
+  bookings             Booking[] @relation("Bookings")
+  maintenanceRaised    MaintenanceRequest[] @relation("MaintenanceRaiser")
+  maintenanceApproved  MaintenanceRequest[] @relation("MaintenanceApprover")
+  auditCyclesCreated   AuditCycle[] @relation("AuditCycleCreator")
+  auditAssignments     AuditAssignment[] @relation("Auditor")
+  auditItemsChecked    AuditItem[] @relation("AuditItemChecker")
+  notifications        Notification[] @relation("UserNotifications")
+  activityLogs         ActivityLog[] @relation("ActivityActor")
+
+  @@map("users")
 }
 
-model vendors {
-  vendor_id      Int       @id @default(autoincrement())
-  vendor_name    String    @db.VarChar(100)
-  contact_person String?   @db.VarChar(100)
-  email          String?   @db.VarChar(100)
-  phone          String?   @db.VarChar(20)
-  address        String?   @db.Text
-  city           String?   @db.VarChar(100)
-  created_at     DateTime? @default(now()) @db.Timestamp(0)
-  assets         assets[]
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  headId      Int?
+  parentId    Int?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  head        User?       @relation("DepartmentHead", fields: [headId], references: [id])
+  parent      Department? @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children    Department[] @relation("DepartmentHierarchy")
+  members     User[]      @relation("DepartmentMembers")
+  allocations Allocation[] @relation("DepartmentAllocations")
+  auditCycles AuditCycle[] @relation("DepartmentAudits")
+
+  @@map("departments")
 }
 
-enum notifications_notification_type {
-  Info
-  Success
-  Warning
-  Error
+model AssetCategory {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  customFields Json?
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  assets       Asset[]
+
+  @@map("asset_categories")
 }
 
-enum users_role {
-  Admin
-  Manager
-  Employee
+model Asset {
+  id              Int         @id @default(autoincrement())
+  assetTag        String      @unique
+  name            String
+  categoryId      Int
+  serialNumber    String?
+  acquisitionDate DateTime?
+  acquisitionCost Float?
+  condition       String?
+  location        String?
+  photoUrl        String?
+  isBookable      Boolean     @default(false)
+  status          AssetStatus @default(AVAILABLE)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  category        AssetCategory @relation(fields: [categoryId], references: [id])
+  
+  allocations         Allocation[]
+  transferRequests    TransferRequest[]
+  bookings            Booking[]
+  maintenanceRequests MaintenanceRequest[]
+  auditItems          AuditItem[]
+
+  @@map("assets")
 }
 
-enum maintenance_requests_priority {
-  Low
-  Medium
-  High
+model Allocation {
+  id                 Int       @id @default(autoincrement())
+  assetId            Int
+  employeeId         Int
+  departmentId       Int?
+  allocatedAt        DateTime  @default(now())
+  expectedReturnDate DateTime?
+  returnedAt         DateTime?
+  checkinCondition   String?
+  checkinNotes       String?
+
+  asset      Asset       @relation(fields: [assetId], references: [id])
+  employee   User        @relation("EmployeeAllocations", fields: [employeeId], references: [id])
+  department Department? @relation("DepartmentAllocations", fields: [departmentId], references: [id])
+
+  @@map("allocations")
 }
 
-enum asset_assignments_assignment_status {
-  Assigned
-  Returned
+model TransferRequest {
+  id             Int            @id @default(autoincrement())
+  assetId        Int
+  fromEmployeeId Int
+  toEmployeeId   Int
+  reason         String
+  status         TransferStatus @default(REQUESTED)
+  approvedById   Int?
+  decidedAt      DateTime?
+  createdAt      DateTime       @default(now())
+
+  asset        Asset @relation(fields: [assetId], references: [id])
+  fromEmployee User  @relation("TransferFrom", fields: [fromEmployeeId], references: [id])
+  toEmployee   User  @relation("TransferTo", fields: [toEmployeeId], references: [id])
+  approvedBy   User? @relation("TransferApprover", fields: [approvedById], references: [id])
+
+  @@map("transfer_requests")
 }
 
-enum maintenance_requests_status {
-  Pending
-  In_Progress @map("In Progress")
-  Completed
-  Cancelled
+model Booking {
+  id         Int           @id @default(autoincrement())
+  assetId    Int
+  bookedById Int
+  startTime  DateTime
+  endTime    DateTime
+  purpose    String
+  status     BookingStatus @default(UPCOMING)
+  createdAt  DateTime      @default(now())
+
+  asset    Asset @relation(fields: [assetId], references: [id])
+  bookedBy User  @relation("Bookings", fields: [bookedById], references: [id])
+
+  @@map("bookings")
 }
 
-enum procurement_requests_status {
-  Pending
-  Approved
-  Rejected
-  Ordered
-  Received
+model MaintenanceRequest {
+  id             Int                 @id @default(autoincrement())
+  assetId        Int
+  raisedById     Int
+  description    String
+  priority       MaintenancePriority @default(MEDIUM)
+  photoUrl       String?
+  status         MaintenanceStatus   @default(PENDING)
+  technicianName String?
+  approvedById   Int?
+  resolvedAt     DateTime?
+  createdAt      DateTime            @default(now())
+
+  asset      Asset @relation(fields: [assetId], references: [id])
+  raisedBy   User  @relation("MaintenanceRaiser", fields: [raisedById], references: [id])
+  approvedBy User? @relation("MaintenanceApprover", fields: [approvedById], references: [id])
+
+  @@map("maintenance_requests")
 }
 
-enum assets_asset_status {
-  Available
-  Assigned
-  Maintenance
-  Retired
+model AuditCycle {
+  id           Int              @id @default(autoincrement())
+  name         String
+  departmentId Int?
+  location     String?
+  startDate    DateTime
+  endDate      DateTime
+  status       AuditCycleStatus @default(OPEN)
+  createdById  Int
+  createdAt    DateTime         @default(now())
+
+  department  Department?       @relation("DepartmentAudits", fields: [departmentId], references: [id])
+  createdBy   User              @relation("AuditCycleCreator", fields: [createdById], references: [id])
+  assignments AuditAssignment[]
+  items       AuditItem[]
+
+  @@map("audit_cycles")
 }
 
-enum assets_asset_condition {
-  Excellent
-  Good
-  Fair
-  Poor
+model AuditAssignment {
+  id        Int @id @default(autoincrement())
+  cycleId   Int
+  auditorId Int
+
+  cycle   AuditCycle @relation(fields: [cycleId], references: [id])
+  auditor User       @relation("Auditor", fields: [auditorId], references: [id])
+
+  @@map("audit_assignments")
+}
+
+model AuditItem {
+  id          Int             @id @default(autoincrement())
+  cycleId     Int
+  assetId     Int
+  result      AuditItemResult @default(PENDING)
+  notes       String?
+  checkedById Int?
+  checkedAt   DateTime?
+
+  cycle     AuditCycle @relation(fields: [cycleId], references: [id])
+  asset     Asset      @relation(fields: [assetId], references: [id])
+  checkedBy User?      @relation("AuditItemChecker", fields: [checkedById], references: [id])
+
+  @@map("audit_items")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String
+  title     String
+  body      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation("UserNotifications", fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int
+  action     String
+  entityType String
+  entityId   Int
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  actor User @relation("ActivityActor", fields: [actorId], references: [id])
+
+  @@map("activity_logs")
 }

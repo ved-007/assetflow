@@ -1,26 +1,17 @@
-import type { Request, Response, NextFunction } from 'express';
-import { verifyToken, type JwtPayload } from '../lib/jwt';
+import { Request, Response, NextFunction } from 'express';
+import { verifyToken } from '../lib/jwt';
+import { AppError } from '../lib/AppError';
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: JwtPayload;
-    }
-  }
-}
-
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const token = req.cookies?.token;
-
-  if (!token) {
-    res.status(401).json({ ok: false, error: 'Not authenticated' });
-    return;
-  }
-
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    req.user = verifyToken(token);
+    const token = req.cookies.token;
+    if (!token) {
+      throw new AppError(401, 'Unauthorized');
+    }
+    const payload = verifyToken(token);
+    req.user = payload;
     next();
-  } catch {
-    res.status(401).json({ ok: false, error: 'Invalid or expired session' });
+  } catch (err) {
+    next(new AppError(401, 'Unauthorized'));
   }
 }

@@ -1,11 +1,10 @@
-import type { Request, Response, NextFunction } from 'express';
-import type { JwtPayload } from '../lib/jwt';
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../lib/AppError';
 
-export function authorize(roles: JwtPayload['role'][]) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      res.status(403).json({ ok: false, error: 'You do not have permission to perform this action' });
-      return;
+export function authorize(allowedRoles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return next(new AppError(403, 'Forbidden'));
     }
     next();
   };

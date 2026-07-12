@@ -1,35 +1,17 @@
-import { prisma } from "./prisma";
-import { emitToUser } from "./socket";
+import { prisma } from './prisma';
+import { emitToUser } from './socket';
 
-function mapNotificationType(type: string) {
-  switch (type.toLowerCase()) {
-    case "success":
-      return "Success";
-    case "warning":
-      return "Warning";
-    case "error":
-      return "Error";
-    default:
-      return "Info";
-  }
-}
-
-export async function notify(
-  userId: number,
-  type: string,
-  title: string,
-  body: string,
-  link?: string,
-): Promise<void> {
-  const notification = await prisma.notifications.create({
+export async function notify(userId: number, type: string, title: string, body: string, link?: string) {
+  const notification = await prisma.notification.create({
     data: {
-      user_id: userId,
+      userId,
+      type,
       title,
-      message: link ? `${body}\n${link}` : body,
-      notification_type: mapNotificationType(type),
-      is_read: false,
+      body,
+      link,
     },
   });
 
-  emitToUser(userId, "notification:new", notification);
+  emitToUser(userId, 'notification:new', notification);
+  return notification;
 }

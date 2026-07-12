@@ -1,16 +1,11 @@
 import React, { useState } from "react";
-import {
-  Building2,
+import { 
+  Building2, 
+  Users, 
   Tags,
-  Users,
   Plus,
-  ShieldCheck,
-  ToggleLeft,
-  X,
   PlusCircle,
-  Briefcase,
-  Layers,
-  UserCheck
+  X
 } from "lucide-react";
 
 interface Department {
