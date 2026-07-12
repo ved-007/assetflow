@@ -11,25 +11,18 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("assetflow_theme") as Theme | null;
-    return stored || "dark";
-  });
+  const theme = "dark";
+  const isDark = true;
+  const toggleTheme = () => {};
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    localStorage.setItem("assetflow_theme", theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+    root.classList.add("dark");
+    localStorage.setItem("assetflow_theme", "dark");
+  }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, isDark: theme === "dark" }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isDark }}>
       {children}
     </ThemeContext.Provider>
   );

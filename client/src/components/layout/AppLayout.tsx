@@ -208,14 +208,7 @@ export const AppLayout: React.FC<{ children?: React.ReactNode }> = ({ children }
           </div>
 
           <div className="flex items-center gap-3 relative">
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+
 
             {/* Notification Bell */}
             <button
